@@ -87,7 +87,7 @@ def anomaly_matching(anomaly_file, segmentation_file, image_size, normalized=Tru
     output_df['anomaly_category'] = anomaly_list
     # Add 1 so we don't have the 0th tooth
     output_df['tooth_number'] = [1 + tooth_num for tooth_num in tooth_list]
-    output_df['image_name'] = [segmentation_file for i in range(len(tooth_list))]
+    output_df['image_name'] = [os.path.basename(segmentation_file) for i in range(len(tooth_list))]
     output_df['x_center'] = x_center_list
     output_df['y_center'] = y_center_list
     output_df['width'] = width_list
@@ -129,7 +129,7 @@ def yolo_to_cartesian(yolo_coordinates, image_size, normalized=True):
 
 
 
-def extract_image(filename, yolo_coordinates, tooth_number, output_folder="SegmentedTeethImages", print_names=False):
+def extract_image(filename, yolo_coordinates, tooth_number, output_folder="SegmentedTeethImages/", print_names=False):
     """
     This function creates separate image files per tooth out of a larger X-ray file.
     Inputs:
@@ -156,8 +156,10 @@ def extract_image(filename, yolo_coordinates, tooth_number, output_folder="Segme
     
     # Write the new images to the folder
     basename = os.path.basename(filename)
-    filename_new = output_folder + "/" + os.path.splitext(basename)[0] + "_" + str(tooth_number) + ".jpg"
+    filename_new = output_folder + os.path.splitext(basename)[0] + "_" + str(tooth_number) + ".jpg"
     io.imsave(filename_new, image_cropped)
     
     if print_names:
         print(filename_new)
+    
+    return(filename_new)
