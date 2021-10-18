@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from skimage import io
+import os
 
 def distance_centers(center_anomaly, center_tooth):
     """
@@ -143,7 +144,7 @@ def extract_image(filename, yolo_coordinates, tooth_number, output_folder="Segme
     image = io.imread(filename)
     
     # Translate yolo coordinates 
-    cartesian_coords = yolo_to_cartesian(yolo_coordinates, image.shape)
+    cartesian_coords = yolo_to_cartesian(yolo_coordinates, image.shape, normalized = False)
     
     # Crop image
     image_cropped = image[cartesian_coords[2]:cartesian_coords[3], cartesian_coords[0]:cartesian_coords[1]]
@@ -154,7 +155,8 @@ def extract_image(filename, yolo_coordinates, tooth_number, output_folder="Segme
         print("New directory created")
     
     # Write the new images to the folder
-    filename_new = output_folder + "\\" + os.path.splitext(filename)[0] + "_" + str(tooth_number) + ".jpg"
+    basename = os.path.basename(filename)
+    filename_new = output_folder + "/" + os.path.splitext(basename)[0] + "_" + str(tooth_number) + ".jpg"
     io.imsave(filename_new, image_cropped)
     
     if print_names:
