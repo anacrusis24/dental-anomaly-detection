@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from skimage import io
 
 def yolo_to_cartesian(yolo_coordinates, image_size, normalized=True):
     """
@@ -37,12 +38,55 @@ def nested_box_area(cartesian_anomaly, cartesian_tooth):
     :param center_tooth: The cartesian coordinates of the tooth
     :return: The area the anomaly takes within the bounding box of the tooth
     """
+    # Initialize values for bounding box of anomaly
+    x_start_new = 0
+    x_end_new = 0
+    y_start_new = 0
+    y_end_new = 0
+    area = 0
 
+    # Conditions to makes sure the area is solely within the tooth bounding box
+    # First check if one of the corners is within the tooth bounding box
+    corner_inside = (((cartesian_anomaly[0] >= cartesian_tooth[0]) and (cartesian_anomaly[2] >= cartesian_tooth[2])
+        and (cartesian_anomaly[0] <= cartesian_tooth[1]) and (cartesian_anomaly[2] <= cartesian_tooth[3])) or
+       ((cartesian_anomaly[1] <= cartesian_tooth[1]) and (cartesian_anomaly[2] >= cartesian_tooth[2])
+        and (cartesian_anomaly[1] >= cartesian_tooth[0]) and (cartesian_anomaly[2] <= cartesian_tooth[3])) or
+       ((cartesian_anomaly[0] >= cartesian_tooth[0]) and (cartesian_anomaly[3] <= cartesian_tooth[3])
+        and (cartesian_anomaly[0] <= cartesian_tooth[1]) and (cartesian_anomaly[3] >= cartesian_tooth[2])) or
+       ((cartesian_anomaly[1] <= cartesian_tooth[1]) and (cartesian_anomaly[3] <= cartesian_tooth[3])
+        and (cartesian_anomaly[1] >= cartesian_tooth[0]) and (cartesian_anomaly[3] >= cartesian_tooth[2])))
+
+    if(corner_inside):
+        # If one of the corners is in the box find the limits of the anomaly bounding box
+        if(cartesian_anomaly[0] >= cartesian_tooth[0]):
+            x_start_new = cartesian_anomaly[0]
+        else:
+            x_start_new = cartesian_tooth[0]
+
+        if(cartesian_anomaly[1] <= cartesian_tooth[1]):
+            x_end_new = cartesian_anomaly[1]
+        else:
+            x_end_new = cartesian_tooth[1]
+
+        if(cartesian_anomaly[2] >= cartesian_tooth[2]):
+            y_start_new = cartesian_anomaly[2]
+        else:
+            y_start_new = cartesian_tooth[2]
+
+        if(cartesian_anomaly[3] <= cartesian_tooth[3]):
+            y_end_new = cartesian_anomaly[3]
+        else:
+            y_end_new = cartesian_tooth[3]
+
+        area = (x_end_new - x_start_new) * (y_end_new - y_start_new)
+    else:
+        # No anomaly corners are in the tooth bounding box
+        area = 0
 
     return area
 
 
-def anomaly_matching(anomaly_file, segmentation_file):
+def anomaly_matching(anomaly_file, segmentation_file, image_size, normalized=True):
     """
     Function matches the anomaly and tooth number
     :param anomaly_file: Bounding box around anomaly as .txt file
@@ -60,23 +104,28 @@ def anomaly_matching(anomaly_file, segmentation_file):
 
     for i in range(len(anomaly_df)):
         # For each row in anomaly df find anomaly center
-        anomaly_center = [anomaly_df.iloc[i][1], anomaly_df.iloc[i][2]]
+        anomaly_yolo = [anomaly_df.iloc[i][1], anomaly_df.iloc[i][2], anomaly_df.iloc[i][3], anomaly_df.iloc[i][4]]
+        anomaly_cartesian = yolo_to_cartesian(anomaly_yolo, image_size, normalized=True)
         anomaly_code = anomaly_df.iloc[i][0]
-        temp_distance_list = []
+        temp_area_list = []
         temp_tooth_list = []
 
         for j in range(len(tooth_df)):
-            # Calculate distance between anomaly center and each tooth bounding box
-            tooth_center = [tooth_df.iloc[j][1], tooth_df.iloc[j][2]]
-            distance = distance_centers(anomaly_center, tooth_center)
-
-            # Add distance to temporary list
-            temp_distance_list.append(distance)
+            # Calculate distance area of anomaly within tooth bounding box
+            tooth_yolo = [tooth_df.iloc[i][1], tooth_df.iloc[i][2], tooth_df.iloc[i][3], tooth_df.iloc[i][4]]
+            tooth_cartesian = yolo_to_cartesian(tooth_yolo, image_size, normalized=True)
+            area = nested_box_area(anomaly_cartesian, tooth_cartesian)
+            print(anomaly_cartesian)
+            print(tooth_cartesian)
+            print(area)
+            # Add area to temporary list
+            temp_area_list.append(area)
             temp_tooth_list.append(tooth_df.iloc[j][0])
 
-        # Add anomaly and tooth corresponding to smallest distance
+        print(temp_area_list)
+        # Add anomaly and tooth corresponding to max area
         anomaly_list.append(anomaly_code)
-        idx = temp_distance_list.index(min(temp_distance_list))
+        idx = temp_area_list.index(max(temp_area_list))
         tooth_list.append(temp_tooth_list[idx])
 
     # Add healthy teeth
@@ -91,11 +140,19 @@ def anomaly_matching(anomaly_file, segmentation_file):
     height_list = []
 
     for tooth in tooth_list:
-        idx = list(tooth_df[0]).index(tooth)
-        x_center_list.append(tooth_df[1][idx])
-        y_center_list.append(tooth_df[2][idx])
-        width_list.append(tooth_df[3][idx])
-        height_list.append(tooth_df[4][idx])
+        if normalized:
+            image_height, image_width = image_size
+            idx = list(tooth_df[0]).index(tooth)
+            x_center_list.append(tooth_df[1][idx] * image_width)
+            y_center_list.append(tooth_df[2][idx] * image_height)
+            width_list.append(tooth_df[3][idx] * image_width)
+            height_list.append(tooth_df[4][idx] * image_height)
+        else:
+            idx = list(tooth_df[0]).index(tooth)
+            x_center_list.append(tooth_df[1][idx])
+            y_center_list.append(tooth_df[2][idx])
+            width_list.append(tooth_df[3][idx])
+            height_list.append(tooth_df[4][idx])
 
     output_df = pd.DataFrame()
     output_df['anomaly_category'] = anomaly_list
@@ -107,6 +164,7 @@ def anomaly_matching(anomaly_file, segmentation_file):
     output_df['width'] = width_list
     output_df['height'] = height_list
     output_df = output_df.sort_values(by='tooth_number', axis=0)
+    output_df = output_df.reset_index(drop=True)
 
     return output_df
 
