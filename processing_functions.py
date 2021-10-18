@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from skimage import io
 
 def distance_centers(center_anomaly, center_tooth):
     """
@@ -13,7 +14,7 @@ def distance_centers(center_anomaly, center_tooth):
     return center_distance
 
 
-def anomaly_matching(anomaly_file, segmentation_file):
+def anomaly_matching(anomaly_file, segmentation_file, image_size, normalized=True):
     """
     Function matches the anomaly and tooth number
     :param anomaly_file: Bounding box around anomaly as .txt file
@@ -24,6 +25,19 @@ def anomaly_matching(anomaly_file, segmentation_file):
     anomaly_df = pd.read_csv(anomaly_file, header=None, sep=' ', dtype=np.float64)
     tooth_df = pd.read_csv(segmentation_file, header=None, sep=' ', dtype=np.float64)
     tooth_df = tooth_df.drop_duplicates()
+
+    # Un-normalize the centers, widths, and heights
+    if normalized:
+        image_height, image_width = image_size
+        anomaly_df[1] = anomaly_df[1] * image_width
+        anomaly_df[2] = anomaly_df[2] * image_height
+        anomaly_df[3] = anomaly_df[3] * image_width
+        anomaly_df[4] = anomaly_df[4] * image_height
+
+        tooth_df[1] = tooth_df[1] * image_width
+        tooth_df[2] = tooth_df[2] * image_height
+        tooth_df[3] = tooth_df[3] * image_width
+        tooth_df[4] = tooth_df[4] * image_height
 
     # Empty tooth and anomaly list
     tooth_list = []
@@ -78,6 +92,7 @@ def anomaly_matching(anomaly_file, segmentation_file):
     output_df['width'] = width_list
     output_df['height'] = height_list
     output_df = output_df.sort_values(by='tooth_number', axis=0)
+    output_df = output_df.reset_index(drop=True )
 
     return output_df
 
