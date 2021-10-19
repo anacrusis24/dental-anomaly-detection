@@ -163,3 +163,11 @@ def extract_image(filename, yolo_coordinates, tooth_number, output_folder="Segme
         print(filename_new)
     
     return(filename_new)
+
+def remove_duplicates(df):
+    df['IS_DUPLICATED']= df.duplicated(subset=['tooth_number'])
+    dup_index = df[df['IS_DUPLICATED']==True].index
+    df.iloc[dup_index-1,0]=8
+    df.drop(dup_index, axis=0, inplace=True)
+    df.drop('IS_DUPLICATED',axis=1, inplace=True)
+    return df
