@@ -1,7 +1,11 @@
 import pandas as pd
 import numpy as np
-from skimage import io
+from skimage import io as io
+from skimage.transform import rotate
+from skimage.util import random_noise
+from skimage.filters import gaussian
 import os
+
 
 def distance_centers(center_anomaly, center_tooth):
     """
@@ -10,8 +14,8 @@ def distance_centers(center_anomaly, center_tooth):
     :param center_tooth: The center of the bounding box surrounding the tooth in the form [x_center, y_center]
     :return: The distance between the two centers
     """
-    center_distance = np.sqrt((float(center_anomaly[0]) - float(center_tooth[0]))**2 +
-                              (float(center_anomaly[1]) - float(center_tooth[1]))**2)
+    center_distance = np.sqrt((float(center_anomaly[0]) - float(center_tooth[0])) ** 2 +
+                              (float(center_anomaly[1]) - float(center_tooth[1])) ** 2)
     return center_distance
 
 
@@ -93,9 +97,10 @@ def anomaly_matching(anomaly_file, segmentation_file, image_size, normalized=Tru
     output_df['width'] = width_list
     output_df['height'] = height_list
     output_df = output_df.sort_values(by='tooth_number', axis=0)
-    output_df = output_df.reset_index(drop=True )
+    output_df = output_df.reset_index(drop=True)
 
     return output_df
+
 
 def yolo_to_cartesian(yolo_coordinates, image_size, normalized=True):
     """
@@ -107,26 +112,24 @@ def yolo_to_cartesian(yolo_coordinates, image_size, normalized=True):
     Outputs:
         - cartesian_coordinates: outputs Cartesian coordinates based on image inputs
     """
-    
+
     x_center, y_center, width, height = yolo_coordinates
     image_height, image_width = image_size
-    
+
     # Back out the true image sizes
     if normalized:
         x_center = x_center * image_width
         y_center = y_center * image_height
         width = width * image_width
         height = height * image_height
-                
+
     x_start = int(x_center - (width) / 2)
     x_end = int(x_start + width)
-    
+
     y_start = int(y_center - (height) / 2)
     y_end = int(y_start + height)
-    
-    return([x_start, x_end, y_start, y_end])
 
-
+    return ([x_start, x_end, y_start, y_end])
 
 
 def extract_image(filename, yolo_coordinates, tooth_number, output_folder="SegmentedTeethImages/", print_names=False):
@@ -139,35 +142,166 @@ def extract_image(filename, yolo_coordinates, tooth_number, output_folder="Segme
         - output_folder: optional parameter naming the folder name and path where the output images will be saved
         - print_names: optional parameter to print file names of completed teeth
         """
-    
+
     # Read in file
     image = io.imread(filename)
-    
+
     # Translate yolo coordinates 
-    cartesian_coords = yolo_to_cartesian(yolo_coordinates, image.shape, normalized = False)
-    
+    cartesian_coords = yolo_to_cartesian(yolo_coordinates, image.shape, normalized=False)
+
     # Crop image
     image_cropped = image[cartesian_coords[2]:cartesian_coords[3], cartesian_coords[0]:cartesian_coords[1]]
-    
+
     # Create a new folder if needed for the output images
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
         print("New directory created")
-    
+
     # Write the new images to the folder
     basename = os.path.basename(filename)
     filename_new = output_folder + os.path.splitext(basename)[0] + "_" + str(tooth_number) + ".jpg"
     io.imsave(filename_new, image_cropped)
-    
+
     if print_names:
         print(filename_new)
-    
-    return(filename_new)
+
+    return (filename_new)
+
 
 def remove_duplicates(df):
-    df['IS_DUPLICATED']= df.duplicated(subset=['tooth_number'])
-    dup_index = df[df['IS_DUPLICATED']==True].index
-    df.iloc[dup_index-1,0]=8
+    df['IS_DUPLICATED'] = df.duplicated(subset=['tooth_number'])
+    dup_index = df[df['IS_DUPLICATED'] == True].index
+    df.iloc[dup_index - 1, 0] = 8
     df.drop(dup_index, axis=0, inplace=True)
-    df.drop('IS_DUPLICATED',axis=1, inplace=True)
+    df.drop('IS_DUPLICATED', axis=1, inplace=True)
     return df
+
+
+def image_rotation(filename, deg, output_folder="SegmentedTeethImages/", print_names=False):
+    """
+    This function takes an image and rotates it and then saves the new image.  The number of rotations
+    and new images made is 360/deg or 360/deg - 1 if 360//deg==0
+    Inputs:
+        filename: the image to rotate
+        deg: the number of degrees to rotate the image by
+        output_folder: optional parameter naming the folder name and path where the output images will be saved
+        print_names: optional parameter to print file names of completed teeth
+    """
+
+    # Read in file
+    image = io.imread(filename)
+
+    # Create a new folder if needed for the output images
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print("New directory created")
+
+    # Create the rotated images
+    basename = os.path.basename(filename)
+    cur_deg = deg
+
+    while(cur_deg < 360):
+        # Make the rotated image
+        rotated_image = rotate(image, angle=cur_deg, mode='wrap')
+
+        # Write the new images to the folder
+        filename_new = output_folder + os.path.splitext(basename)[0] + "_" + "rotated" + str(cur_deg) + ".jpg"
+        io.imsave(filename_new, rotated_image)
+
+        # Print names of files
+        if print_names:
+            print(filename_new)
+
+        # Increase the number of degrees
+        cur_deg += deg
+
+def image_flip(filename, output_folder="SegmentedTeethImages/", print_names=False):
+    """
+    This function flips the image left-right and up-down and saves the images
+    Inputs:
+        filename: the image to flip
+        output_folder: optional parameter naming the folder name and path where the output images will be saved
+        print_names: optional parameter to print file names of completed teeth
+    """
+    # Read in file
+    image = io.imread(filename)
+
+    # Create a new folder if needed for the output images
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print("New directory created")
+
+    # Flip image left and right
+    flipLR = np.fliplr(image)
+
+    # Flip image up and down
+    flipUD = np.flipud(image)
+
+    # Write the new images to the folder
+    basename = os.path.basename(filename)
+    filename_new_LR = output_folder + os.path.splitext(basename)[0] + "_" + "LR" + ".jpg"
+    filename_new_UD = output_folder + os.path.splitext(basename)[0] + "_" + "UD" + ".jpg"
+    io.imsave(filename_new_LR, flipLR)
+    io.imsave(filename_new_UD, flipUD)
+
+    # Print names of files
+    if print_names:
+        print(filename_new_LR, filename_new_UD)
+
+def image_noise(filename, output_folder="SegmentedTeethImages/", print_names=False):
+    """
+    This function adds random noise to the image and saves it
+    Inputs:
+        filename: the image to add noise too
+        output_folder: optional parameter naming the folder name and path where the output images will be saved
+        print_names: optional parameter to print file names of completed teeth
+    """
+    # Read in file
+    image = io.imread(filename)
+
+    # Create a new folder if needed for the output images
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print("New directory created")
+
+    # Add random noise
+    sigma = 0.1
+    noise_rand = random_noise(image, var=sigma ** 2)
+
+    # Write the new images to the folder
+    basename = os.path.basename(filename)
+    filename_new = output_folder + os.path.splitext(basename)[0] + "_" + "noise" + ".jpg"
+    io.imsave(filename_new, noise_rand)
+
+    # Print names of files
+    if print_names:
+        print(filename_new)
+
+def image_gauss_blur(filename, output_folder="SegmentedTeethImages/", print_names=False):
+    """
+    This function adds gaussian blur to the image and saves it
+    Inputs:
+        filename: the image to add blur too
+        output_folder: optional parameter naming the folder name and path where the output images will be saved
+        print_names: optional parameter to print file names of completed teeth
+    """
+    # Read in file
+    image = io.imread(filename)
+
+    # Create a new folder if needed for the output images
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print("New directory created")
+
+    # Add random noise
+    sigma = 1
+    blurred_image = gaussian(image, sigma=sigma, multichannel=True)
+
+    # Write the new images to the folder
+    basename = os.path.basename(filename)
+    filename_new = output_folder + os.path.splitext(basename)[0] + "_" + "blur" + ".jpg"
+    io.imsave(filename_new, blurred_image)
+
+    # Print names of files
+    if print_names:
+        print(filename_new)
