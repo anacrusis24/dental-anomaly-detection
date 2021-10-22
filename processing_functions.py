@@ -203,7 +203,7 @@ def image_rotation(filename, deg, output_folder="SegmentedTeethImages/", print_n
 
     while (cur_deg < 360):
         # Make the rotated image
-        rotated_image = rotate(image, angle=cur_deg, mode='wrap')
+        rotated_image = rotate(image, angle=cur_deg)
 
         # Write the new images to the folder
         filename_new = output_folder + os.path.splitext(basename)[0] + "_" + "rotated" + str(cur_deg) + ".jpg"
