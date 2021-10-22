@@ -165,7 +165,7 @@ def extract_image(filename, yolo_coordinates, tooth_number, output_folder="Segme
     if print_names:
         print(filename_new)
 
-    return (filename_new)
+    return filename_new
 
 
 def remove_duplicates(df):
@@ -199,14 +199,16 @@ def image_rotation(filename, deg, output_folder="SegmentedTeethImages/", print_n
     # Create the rotated images
     basename = os.path.basename(filename)
     cur_deg = deg
+    file_names = []
 
-    while(cur_deg < 360):
+    while (cur_deg < 360):
         # Make the rotated image
         rotated_image = rotate(image, angle=cur_deg, mode='wrap')
 
         # Write the new images to the folder
         filename_new = output_folder + os.path.splitext(basename)[0] + "_" + "rotated" + str(cur_deg) + ".jpg"
         io.imsave(filename_new, rotated_image)
+        file_names.append(filename_new)
 
         # Print names of files
         if print_names:
@@ -214,6 +216,9 @@ def image_rotation(filename, deg, output_folder="SegmentedTeethImages/", print_n
 
         # Increase the number of degrees
         cur_deg += deg
+
+    return file_names
+
 
 def image_flip(filename, output_folder="SegmentedTeethImages/", print_names=False):
     """
@@ -243,12 +248,16 @@ def image_flip(filename, output_folder="SegmentedTeethImages/", print_names=Fals
     filename_new_UD = output_folder + os.path.splitext(basename)[0] + "_" + "UD" + ".jpg"
     io.imsave(filename_new_LR, flipLR)
     io.imsave(filename_new_UD, flipUD)
+    file_names = [filename_new_LR, filename_new_UD]
 
     # Print names of files
     if print_names:
         print(filename_new_LR, filename_new_UD)
 
-def image_noise(filename, output_folder="SegmentedTeethImages/", print_names=False):
+    return file_names
+
+
+def image_noise(filename, sigma=.1, output_folder="SegmentedTeethImages/", print_names=False):
     """
     This function adds random noise to the image and saves it
     Inputs:
@@ -265,7 +274,6 @@ def image_noise(filename, output_folder="SegmentedTeethImages/", print_names=Fal
         print("New directory created")
 
     # Add random noise
-    sigma = 0.1
     noise_rand = random_noise(image, var=sigma ** 2)
 
     # Write the new images to the folder
@@ -277,7 +285,10 @@ def image_noise(filename, output_folder="SegmentedTeethImages/", print_names=Fal
     if print_names:
         print(filename_new)
 
-def image_gauss_blur(filename, output_folder="SegmentedTeethImages/", print_names=False):
+    return filename_new
+
+
+def image_gauss_blur(filename, sigma=1, output_folder="SegmentedTeethImages/", print_names=False):
     """
     This function adds gaussian blur to the image and saves it
     Inputs:
@@ -294,7 +305,6 @@ def image_gauss_blur(filename, output_folder="SegmentedTeethImages/", print_name
         print("New directory created")
 
     # Add random noise
-    sigma = 1
     blurred_image = gaussian(image, sigma=sigma, multichannel=True)
 
     # Write the new images to the folder
@@ -305,3 +315,5 @@ def image_gauss_blur(filename, output_folder="SegmentedTeethImages/", print_name
     # Print names of files
     if print_names:
         print(filename_new)
+
+    return filename_new
