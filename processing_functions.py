@@ -5,6 +5,7 @@ from skimage.transform import rotate
 from skimage.util import random_noise
 from skimage.filters import gaussian
 import os
+from imblearn.over_sampling import SMOTE
 
 
 def distance_centers(center_anomaly, center_tooth):
@@ -400,3 +401,34 @@ def make_data(xray_path, anomaly_path, segmentation_path, output_path, which_ano
     main_df['anomaly_code'] = anomaly_codes
 
     main_df.to_csv('data.csv')
+
+def SMOTE_Balance(train_dataloader):
+    sm = SMOTE(random_state=42, k_neighbors=1)
+    X_train_img = pd.DataFrame(columns=range(0,128*128))
+    y_train_img = list()
+
+    for (x,y) in tqdm(train_loader):
+        y = y.tolist()
+        for i in range(len(x)):
+            img = x[i]
+            c = y[i]
+            img = np.array(img)
+            img = np.resize(img, (128*128)).tolist()
+            length = len(X_train_img)
+            X_train_img.loc[length] = img
+            y_train_img.append(c)
+    print("Transformed images for SMOTE")       
+    
+    smote_X_train, smote_ny_train = sm.fit_resample(X_train_img,y_train_img)
+    print("Performed SMOTE")
+    
+    smote_X_train_rs = []
+    for i in range(0, len(smote_X_train)):
+        smote_X_train_rs.append(np.resize(np.array(smote_X_train.loc[i]), (3,244,244)))
+    smote_X_train_rs = np.asarray(smote_X_train_rs)
+    smote_X_train_rs = torch.from_numpy(smote_X_train_rs)
+    smote_ny_train = torch.FloatTensor(smote_ny_train)
+    print("Transformed images for Model")
+    
+    return smote_X_train_rs, smote_ny_train
+
