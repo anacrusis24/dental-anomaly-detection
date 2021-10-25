@@ -317,3 +317,86 @@ def image_gauss_blur(filename, sigma=1, output_folder="SegmentedTeethImages/", p
         print(filename_new)
 
     return filename_new
+
+
+def make_data(xray_path, anomaly_path, segmentation_path, output_path, which_anomaly=[0, 1, 2, 3, 4, 5, 6, 7, 8],
+              add_rotation=False, rotation_deg=20, add_flip=False, add_noise=False, sigma_noise=0.1,
+              add_blur=False, sigma_blur=1):
+    """
+    Function makes the segmented teeth with whichever data augmentation and then creates a csv that lists
+    the file paths and the corresponding label.
+    Inputs:
+        x_ray_path: path to the x-ray jpegs
+        anomaly_path: path to the anomaly bounding box txts
+        segmentation_path: path to the teeth bounding box txts
+        output_path: path to output the segmented teeth
+        which_anomaly: a list of anomalies that we want to have augmented
+        add_rotation: if true augment image with rotation
+        rotatation_deg: how much the rotation should turn
+        add_flip: if true augment image with flips
+        add_noise: if true augment image with noise
+        sigma_noise: noise parameter
+        add_blur: if true augment image with blur
+        sigma_blur: blur parameter
+    """
+    file_paths = []
+    anomaly_codes = []
+
+    xray_filenames = os.listdir(xray_path)
+    anomaly_filenames = os.listdir(anomaly_path)
+    segmentation_filenames = os.listdir(segmentation_path)
+
+    for i in range(len(anomaly_filenames)):
+        # Create dataframe with tooth number
+        anomalies_df = anomaly_matching(anomaly_path + anomaly_filenames[i],
+                                        segmentation_path + segmentation_filenames[i],
+                                        io.imread(xray_path + xray_filenames[i]).shape,
+                                        normalized=True)
+        anomalies_df = remove_duplicates(anomalies_df)
+
+        for index, row in anomalies_df.iterrows():
+            yolo_coord = row[['x_center', 'y_center', 'width', 'height']].to_list()
+            tooth_file = extract_image(xray_path + xray_filenames[i],
+                                       yolo_coord,
+                                       int(row['tooth_number']),
+                                       output_folder=output_path,
+                                       print_names=False)
+            file_paths.append(tooth_file)
+            anomaly_codes.append(row['anomaly_category'])
+
+            tooth_file_path = tooth_file
+
+            if row['anomaly_category'] in which_anomaly:
+                if add_rotation:
+                    rotated_images = image_rotation(tooth_file_path, deg=rotation_deg,
+                                                    output_folder=output_path, print_names=False)
+                    rotated_labels = [row['anomaly_category']] * len(rotated_images)
+                    print(rotated_labels)
+                    file_paths.extend(rotated_images)
+                    anomaly_codes.extend(rotated_labels)
+
+                if add_flip:
+                    flipped_images = image_flip(tooth_file_path, output_folder=output_path, print_names=False)
+                    flipped_labels = [row['anomaly_category']] * len(flipped_images)
+                    file_paths.extend(flipped_images)
+                    anomaly_codes.extend(flipped_labels)
+
+                if add_noise:
+                    noise_image = image_noise(tooth_file_path, sigma=sigma_noise,
+                                              output_folder=output_path, print_names=False)
+                    noise_label = row['anomaly_category']
+                    file_paths.append(noise_image)
+                    anomaly_codes.append(noise_label)
+
+                if add_blur:
+                    blur_image = image_gauss_blur(tooth_file_path, sigma=sigma_blur,
+                                                  output_folder=output_path, print_names=False)
+                    blur_label = row['anomaly_category']
+                    file_paths.append(blur_image)
+                    anomaly_codes.append(blur_label)
+
+    main_df = pd.DataFrame()
+    main_df['file_paths'] = file_paths
+    main_df['anomaly_code'] = anomaly_codes
+
+    main_df.to_csv('data.csv')
