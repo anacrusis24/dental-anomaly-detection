@@ -5,6 +5,7 @@ from skimage.transform import rotate
 from skimage.util import random_noise
 from skimage.filters import gaussian
 import os
+from tqdm import tqdm
 from imblearn.over_sampling import SMOTE
 
 
@@ -177,6 +178,21 @@ def remove_duplicates(df):
     df.drop('IS_DUPLICATED', axis=1, inplace=True)
     return df
 
+def multi_labeling(df):
+    df = df.copy()  # Copy not to delete original dataset
+    df['anomaly_category'] = df['anomaly_category'].astype(object)  # Change dtype from int to list
+    df['anomaly_category_old'] = df['anomaly_category']
+    
+    for index, row in df.iterrows():  # Updating anomaly category to list of anomalies
+        filler_list = [0] * 8
+        all_anomalies = df[df['tooth_number'] == row['tooth_number']]['anomaly_category_old'].to_list()
+        for anomaly in all_anomalies:
+            filler_list[anomaly] = 1
+        df.at[index, 'anomaly_category'] = filler_list
+        
+    deduplicated_df = df[~df.duplicated(subset=['tooth_number'])]
+    deduplicated_df = deduplicated_df.drop(['anomaly_category_old'], axis = 1)
+    return(deduplicated_df)
 
 def image_rotation(filename, deg, output_folder="SegmentedTeethImages/", print_names=False):
     """
