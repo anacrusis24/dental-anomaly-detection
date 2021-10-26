@@ -6,6 +6,7 @@ from skimage.util import random_noise
 from skimage.filters import gaussian
 import os
 from tqdm import tqdm
+import torch
 from imblearn.over_sampling import SMOTE
 
 
@@ -358,6 +359,10 @@ def make_data(xray_path, anomaly_path, segmentation_path, output_path, which_ano
     """
     file_paths = []
     anomaly_codes = []
+    is_rotated = []
+    is_flipped = []
+    is_noise = []
+    is_blur = []
 
     xray_filenames = os.listdir(xray_path)
     anomaly_filenames = os.listdir(anomaly_path)
@@ -378,8 +383,13 @@ def make_data(xray_path, anomaly_path, segmentation_path, output_path, which_ano
                                        int(row['tooth_number']),
                                        output_folder=output_path,
                                        print_names=False)
+            
             file_paths.append(tooth_file)
             anomaly_codes.append(row['anomaly_category'])
+            is_rotated.append(0)
+            is_flipped.append(0)
+            is_noise.append(0)
+            is_blur.append(0)
 
             tooth_file_path = tooth_file
 
@@ -388,42 +398,74 @@ def make_data(xray_path, anomaly_path, segmentation_path, output_path, which_ano
                     rotated_images = image_rotation(tooth_file_path, deg=rotation_deg,
                                                     output_folder=output_path, print_names=False)
                     rotated_labels = [row['anomaly_category']] * len(rotated_images)
-                    print(rotated_labels)
+                    rotated_bool = [1] * len(rotated_images)
+                    flipped_bool = [0] * len(rotated_images)
+                    noise_bool = [0] * len(rotated_images)
+                    blur_bool = [0] * len(rotated_images)
+                   
                     file_paths.extend(rotated_images)
                     anomaly_codes.extend(rotated_labels)
+                    is_rotated.extend(rotated_bool)
+                    is_flipped.extend(flipped_bool)
+                    is_noise.extend(noise_bool)
+                    is_blur.extend(blur_bool)
 
                 if add_flip:
                     flipped_images = image_flip(tooth_file_path, output_folder=output_path, print_names=False)
                     flipped_labels = [row['anomaly_category']] * len(flipped_images)
+                    rotated_bool = [0] * len(flipped_images)
+                    flipped_bool = [1] * len(flipped_images)
+                    noise_bool = [0] * len(flipped_images)
+                    blur_bool = [0] * len(flipped_images)
+                   
                     file_paths.extend(flipped_images)
                     anomaly_codes.extend(flipped_labels)
+                    is_rotated.extend(rotated_bool)
+                    is_flipped.extend(flipped_bool)
+                    is_noise.extend(noise_bool)
+                    is_blur.extend(blur_bool)
 
                 if add_noise:
                     noise_image = image_noise(tooth_file_path, sigma=sigma_noise,
                                               output_folder=output_path, print_names=False)
                     noise_label = row['anomaly_category']
+                    
                     file_paths.append(noise_image)
                     anomaly_codes.append(noise_label)
+                    is_rotated.append(0)
+                    is_flipped.append(0)
+                    is_noise.append(1)
+                    is_blur.append(0)
+                    
 
                 if add_blur:
                     blur_image = image_gauss_blur(tooth_file_path, sigma=sigma_blur,
                                                   output_folder=output_path, print_names=False)
                     blur_label = row['anomaly_category']
+                    
                     file_paths.append(blur_image)
                     anomaly_codes.append(blur_label)
+                    is_rotated.append(0)
+                    is_flipped.append(0)
+                    is_noise.append(0)
+                    is_blur.append(1)
 
     main_df = pd.DataFrame()
-    main_df['file_paths'] = file_paths
+    main_df['file_path'] = file_paths
     main_df['anomaly_code'] = anomaly_codes
-
-    main_df.to_csv('data.csv')
+    main_df['is_rotated'] = is_rotated
+    main_df['is_flipped'] = is_flipped
+    main_df['is_noise'] = is_noise
+    main_df['is_blur'] = is_blur
+    main_df.to_csv('segmented_data.csv')
+    print('Made segmented_data.csv')
 
 def SMOTE_Balance(train_dataloader):
     sm = SMOTE(random_state=42, k_neighbors=1)
     X_train_img = pd.DataFrame(columns=range(0,128*128))
     y_train_img = list()
 
-    for (x,y) in tqdm(train_loader):
+    for (x,y) in tqdm(train_dataloader):
         y = y.tolist()
         for i in range(len(x)):
             img = x[i]
