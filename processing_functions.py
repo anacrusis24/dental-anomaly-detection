@@ -33,6 +33,8 @@ def anomaly_matching(anomaly_file, segmentation_file, image_size, normalized=Tru
     anomaly_df = pd.read_csv(anomaly_file, header=None, sep=' ', dtype=np.float64)
     tooth_df = pd.read_csv(segmentation_file, header=None, sep=' ', dtype=np.float64)
     tooth_df = tooth_df.drop_duplicates()
+    
+    tooth_df[0] = pd.Series(range(1, len(tooth_df) + 1)) # Comment out if teeth number given
 
     # Un-normalize the centers, widths, and heights
     if normalized:
@@ -93,7 +95,8 @@ def anomaly_matching(anomaly_file, segmentation_file, image_size, normalized=Tru
     output_df = pd.DataFrame()
     output_df['anomaly_category'] = anomaly_list
     # Add 1 so we don't have the 0th tooth
-    output_df['tooth_number'] = [1 + tooth_num for tooth_num in tooth_list]
+#     output_df['tooth_number'] = [1 + tooth_num for tooth_num in tooth_list]
+    output_df['tooth_number'] = [tooth_num for tooth_num in tooth_list]
     output_df['image_name'] = [os.path.basename(segmentation_file) for i in range(len(tooth_list))]
     output_df['x_center'] = x_center_list
     output_df['y_center'] = y_center_list
@@ -367,18 +370,42 @@ def make_data(xray_path, anomaly_path, segmentation_path, output_path, which_ano
     xray_filenames = os.listdir(xray_path)
     anomaly_filenames = os.listdir(anomaly_path)
     segmentation_filenames = os.listdir(segmentation_path)
+    
+    xray_file_stripped = [x[:-4] for x in xray_filenames]
+    anomaly_file_stripped = [x[:-4] for x in anomaly_filenames]
+    segmentation_file_stripped = [x[:-4] for x in segmentation_filenames]
+    final_list = set(xray_file_stripped).intersection(anomaly_file_stripped)
+    final_list = set(final_list).intersection(segmentation_file_stripped)
+    final_list = list(final_list)
+    
+    extension_list = []
+    
+    for file in final_list:
+        if(file + '.jpg' in xray_filenames):
+            extension_list.append(1)
+        else:
+            extension_list.append(0)
 
-    for i in range(len(anomaly_filenames)):
+    for i in range(len(final_list)):
         # Create dataframe with tooth number
-        anomalies_df = anomaly_matching(anomaly_path + anomaly_filenames[i],
-                                        segmentation_path + segmentation_filenames[i],
-                                        io.imread(xray_path + xray_filenames[i]).shape,
-                                        normalized=True)
+        if(extension_list[i] == 1):
+            anomalies_df = anomaly_matching(anomaly_path + final_list[i] + '.txt',
+                                            segmentation_path + final_list[i] + '.txt',
+                                            io.imread(xray_path + final_list[i] + '.jpg').shape,
+                                            normalized=True)
+            x_ray = xray_path + final_list[i] + '.jpg'
+        else:
+            anomalies_df = anomaly_matching(anomaly_path + final_list[i] + '.txt',
+                                            segmentation_path + final_list[i] + '.txt',
+                                            io.imread(xray_path + final_list[i] + '.png').shape,
+                                            normalized=True)
+            x_ray = xray_path + final_list[i] + '.png'
+        
         anomalies_df = remove_duplicates(anomalies_df)
 
         for index, row in anomalies_df.iterrows():
             yolo_coord = row[['x_center', 'y_center', 'width', 'height']].to_list()
-            tooth_file = extract_image(xray_path + xray_filenames[i],
+            tooth_file = extract_image(x_ray,
                                        yolo_coord,
                                        int(row['tooth_number']),
                                        output_folder=output_path,
@@ -457,8 +484,9 @@ def make_data(xray_path, anomaly_path, segmentation_path, output_path, which_ano
     main_df['is_flipped'] = is_flipped
     main_df['is_noise'] = is_noise
     main_df['is_blur'] = is_blur
-    main_df.to_csv('segmented_data.csv')
+    main_df.to_csv(f'C:/Documents/Dental_Detection/data_csv/segmented_data.csv')
     print('Made segmented_data.csv')
+    
 
 def SMOTE_Balance(train_dataloader):
     sm = SMOTE(random_state=42, k_neighbors=1)
